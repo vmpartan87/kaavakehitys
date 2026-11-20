@@ -63,7 +63,8 @@
   "matala": 15,
   "tyhja": 10,
   "vajaa_max": 30,
-  "asema": 20
+  "asema": 20,
+  "vuokra": 15
  },
  "hel_rakennusluokat": {
   "011": "Yhden asunnon talot",
@@ -134,5 +135,7 @@
   "931": "Saunarakennukset",
   "941": "Talousrakennukset",
   "999": "Muut rakennukset"
- }
+ },
+ "vuokra_puskuri_m": 8,
+ "vuokra_lahde": "Kauppalehti Toimitilat, vapaat toimitilat, haettu 20.11.2026"
 }

@@ -5,6 +5,7 @@ Etsii Helsingistä, Espoosta ja Vantaalta asemakaavan K- ja T-alueita (liike, to
 ## Tiedostot
 
 - `pipeline.py` laskee ehdokkaat ja pisteet raakadatasta (`raw/*.json`, EPSG:3879) ja kirjoittaa `out/data.json`.
+- `vapaat.py` paikantaa Kauppalehti Toimitilojen vapaiden tilojen viennit (`raw/kauppalehti-*.xlsx`) pääkaupunkiseudun osoiteluettelon avulla ja kirjoittaa `raw/vapaat.json`. `pipeline.py` liittää ne tontteihin ("Toimitiloja vuokrattavana").
 - `config.json` sisältää yleiskaavamerkintöjen tehokkuusoletukset, vajaakäytön rajat ja pisteytyksen painot. Näitä voi muokata ilman koodia.
 - `index.html` on karttaportaali. Se lukee `data.json`-tiedoston samasta kansiosta.
 

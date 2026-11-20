@@ -11,7 +11,6 @@
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.3/leaflet-maplibre-gl.js"></script>
-<script src="config.js"></script>
 <style>
 /* required styles */
 
@@ -749,6 +748,9 @@ details.method p{margin:6px 0}
 .tag.k{border-color:var(--k);color:var(--k)} .tag.t{border-color:var(--t);color:var(--t)}
 .tag.v{border-color:var(--warn);color:var(--warn)} .tag.st{background:var(--ink);color:var(--panel);border-color:var(--ink)}
 .tag.yk0{border-style:dashed}
+.tag.vu{background:var(--good);border-color:var(--good);color:#fff}
+.flag.vu.on{border-color:var(--good);color:var(--good);background:color-mix(in srgb,var(--good) 10%,transparent)}
+table.vl{width:100%;border-collapse:collapse;font-size:12.5px} table.vl td{padding:3px 0;border-bottom:1px solid var(--line)} table.vl td.r{text-align:right;font-variant-numeric:tabular-nums}
 #mapwrap{position:relative;min-height:0}
 #map{position:absolute;inset:0;background:var(--land)}
 .leaflet-container{background:var(--land);font-family:var(--font-body)}
@@ -796,6 +798,8 @@ textarea{width:100%;min-height:64px;border:1px solid var(--line);border-radius:6
 .status button[aria-pressed="true"]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
 .note{font-size:12px;color:var(--muted)}
 .empty{padding:24px 14px;color:var(--muted)}
+dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);padding:20px;width:min(460px,calc(100% - 32px))}
+dialog::backdrop{background:rgba(0,0,0,.35)}
 #toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--panel);padding:8px 14px;border-radius:6px;font-size:13px;display:none;z-index:1000}
 @media (max-width:860px){
   main{grid-template-columns:1fr;grid-template-rows:55vh auto}
@@ -812,6 +816,7 @@ textarea{width:100%;min-height:64px;border:1px solid var(--line);border-radius:6
   <h1>Kaava<span>potentiaali</span></h1>
   <div class="stats" id="stats"></div>
   <div class="hdr-right">
+    <button class="btn" id="setBtn" aria-haspopup="dialog">Asetukset</button>
     <button class="btn" id="copyBtn" title="Kopioi suodatettu lista leikepöydälle Exceliin liitettäväksi">Kopioi lista Exceliin</button>
   </div>
 </header>
@@ -832,7 +837,12 @@ textarea{width:100%;min-height:64px;border:1px solid var(--line);border-radius:6
         <label class="chip"><input type="checkbox" name="vaj" value="vanha" checked>Rakennettu ennen 1995</label>
         <label class="chip"><input type="checkbox" name="vaj" value="matala" checked>Matala tehokkuus</label>
         <label class="chip"><input type="checkbox" name="vaj" value="tyhja" checked>Tyhjä tai pysäköinti</label>
+        <label class="chip"><input type="checkbox" name="vaj" value="vuokra" checked>Toimitiloja vuokrattavana</label>
         <label class="chip"><input type="checkbox" name="vaj" value="ei" >Ei merkkejä</label>
+      </div>
+      <div class="frow"><span class="flabel">Vapaat toimitilat (Kauppalehti Toimitilat)</span>
+        <label class="chip"><input type="checkbox" id="onlyVuokra">Vain kohteet, joissa toimitiloja vuokrattavana</label>
+        <select id="minVuokra" class="btn" aria-label="Vapaata tilaa vähintään"><option value="0">Vapaata tilaa vähintään: ei rajaa</option><option value="300">300 m²</option><option value="1000">1 000 m²</option><option value="3000">3 000 m²</option></select>
       </div>
       <div><span class="flabel">AK-potentiaali vähintään</span>
         <div class="range"><input id="minPot" type="range" min="1000" max="20000" step="500" value="2500"><output id="minPotO" class="num"></output></div></div>
@@ -847,12 +857,13 @@ textarea{width:100%;min-height:64px;border:1px solid var(--line);border-radius:6
       <details class="method"><summary>Miten kohteet on valittu ja pisteytetty</summary>
         <p>Mukana ovat asemakaavan K- ja T-alueet, joiden alla yleiskaava osoittaa asumista: Helsingissä YK2016 A1–A4 ja C1–C3 (100 m ruudut), Vantaalla yleiskaavayhdistelmän A, AP, AC ja C (tulkittu kartan väreistä). Espoon yleiskaava ei ole avoimena datana, joten Espoon kohteet ovat mukana ilman yleiskaavatarkistusta.</p>
         <p><b>AK-potentiaali</b> = tontin ala × yleiskaavamerkinnän tavoitetehokkuus × asumiseen osoitetun alueen osuus. Tehokkuusoletukset: HEL A1 2,0 · A2 1,4 · A3 0,8 · A4 0,4 · C1 2,5 · C2 2,0 · C3 1,5; VAN A 1,2 · AC 1,5 · C 2,0 · AP 0,4; ESP oletus 1,0.</p>
-        <p><b>Pisteet 0–100:</b> potentiaali enintään 35 (täysi 25 000 k-m²:stä), yleiskaavan asumisosuus enintään 15 (Espoo 6), vajaakäyttö enintään 30 (vanha 10, matala tehokkuus 15, tyhjä/pysäköinti 10), raideasema 20 (≤ 500 m), 14 (≤ 800 m), 8 (≤ 1 200 m).</p>
+        <p><b>Pisteet 0–100:</b> potentiaali enintään 35 (täysi 25 000 k-m²:stä), yleiskaavan asumisosuus enintään 15 (Espoo 6), vajaakäyttö enintään 30 (toimitiloja vuokrattavana 15, vanha 10, matala tehokkuus 15, tyhjä/pysäköinti 10), raideasema 20 (≤ 500 m), 14 (≤ 800 m), 8 (≤ 1 200 m).</p>
+        <p><b>Toimitiloja vuokrattavana</b> = Kauppalehti Toimitilojen vapaiden tilojen ilmoitus (20.11.2026) osuu tontille. Osoitteet on paikannettu pääkaupunkiseudun osoiteluettelolla.</p>
         <p>Matala tehokkuus = nykyinen kerrosala alle 50 % rakennusoikeudesta tai potentiaalista. Tyhjä = kerrosala alle 10 % tontin alasta tai yli puolet pysäköintiä.</p>
       </details>
     </div>
     <div class="listhead"><span id="count" class="num"></span>
-      <label>Järjestys <select id="sort"><option value="pisteet">Pisteet</option><option value="potentiaali">Potentiaali</option><option value="asema_m">Etäisyys asemalle</option><option value="valm_vuosi">Rakennusvuosi</option></select></label></div>
+      <label>Järjestys <select id="sort"><option value="pisteet">Pisteet</option><option value="potentiaali">Potentiaali</option><option value="asema_m">Etäisyys asemalle</option><option value="valm_vuosi">Rakennusvuosi</option><option value="vuokra_m2">Vapaat toimitilat m²</option></select></label></div>
     <div id="list" role="list"></div>
   </aside>
   <section id="mapwrap">
@@ -876,9 +887,7 @@ textarea{width:100%;min-height:64px;border:1px solid var(--line);border-radius:6
         <label><input type="checkbox" id="lyVir" checked>Vireillä olevat asemakaavat</label>
         <label>Kaavojen peittävyys <input type="range" id="kaavaOp" min="0.2" max="1" step="0.1" value="0.6"></label>
         <label><input type="checkbox" id="lyKohteet" checked>Ehdokastontit</label></div>
-      <div class="grp"><b>MML API-avain</b>
-        <input type="text" id="mmlKey" placeholder="Liitä avain tähän" autocomplete="off" aria-label="Maanmittauslaitoksen API-avain">
-        <span class="note" id="mmlNote">Avain tallentuu vain tähän selaimeen. Ilmaisen avaimen saa MML:n Oma tili -palvelusta.</span></div>
+      <div class="grp"><span class="note" id="mmlNote"></span></div>
     </details>
     <div class="legend">
       <div><span class="sw" style="background:#7a3e10"></span>Pisteet 70–100</div>
@@ -889,6 +898,23 @@ textarea{width:100%;min-height:64px;border:1px solid var(--line);border-radius:6
     <div id="card" aria-live="polite"></div>
   </section>
 </main>
+<dialog id="setDlg" aria-labelledby="setTitle">
+  <form method="dialog" id="setForm">
+    <h2 id="setTitle">Asetukset</h2>
+    <label for="mmlKey" class="flabel" style="display:block;margin-top:14px">Maanmittauslaitoksen API-avain</label>
+    <div style="display:flex;gap:6px;margin-top:4px">
+      <input type="password" id="mmlKey" autocomplete="off" spellcheck="false" placeholder="Liitä avain tähän" style="flex:1;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg)">
+      <button type="button" class="btn" id="showKey">Näytä</button>
+    </div>
+    <p class="note" id="keyState" style="margin:8px 0 0"></p>
+    <p class="note" style="margin:8px 0 0">Avain tallentuu vain tämän selaimen muistiin tällä koneella. Sitä ei tallenneta portaalin tiedostoihin, eikä se näy muille käyttäjille. Avain lähtee vain Maanmittauslaitoksen karttapalveluun karttatasoja haettaessa. Ilmaisen avaimen saa MML:n Oma tili -palvelusta.</p>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap">
+      <button type="button" class="btn" id="delKey">Poista avain</button>
+      <button type="button" class="btn" id="closeSet">Sulje</button>
+      <button type="button" class="btn primary" id="saveKey">Tallenna</button>
+    </div>
+  </form>
+</dialog>
 <div id="toast"></div>
 <script>
 const fmt = n => n==null ? '–' : Math.round(n).toLocaleString('fi-FI');
@@ -914,7 +940,8 @@ async function init(){
   initMap(); bind(); apply();
 }
 
-function mmlKey(){ try{ return localStorage.getItem('kp_mml_key') || (window.KP_CONFIG&&KP_CONFIG.mmlApiKey) || ''; }catch(e){ return (window.KP_CONFIG&&KP_CONFIG.mmlApiKey)||''; } }
+function mmlKey(){ try{ return localStorage.getItem('kp_mml_key') || ''; }catch(e){ return ''; } }
+function setMmlKey(v){ try{ if(v) localStorage.setItem('kp_mml_key', v); else localStorage.removeItem('kp_mml_key'); return true; }catch(e){ return false; } }
 function initMap(){
   map = L.map('map',{zoomControl:true, preferCanvas:true, maxZoom:19}).setView([60.225,24.85],11);
   map.attributionControl.setPrefix(false);
@@ -958,10 +985,11 @@ function initMap(){
     BM.mml_tausta.options.k=k; BM.mml_orto.options.k=k; BM.mml_tausta.redraw(); BM.mml_orto.redraw();
     if(kiintMml){ kiintMml.remove(); kiintMml=null; }
     if(k && document.getElementById('lyKiintMml').checked){ kiintMml=makeKiintMml(k).addTo(map); }
-    document.getElementById('mmlNote').textContent = k ? 'Avain käytössä. Se on tallennettu vain tähän selaimeen.' : 'Ilmaisen avaimen saa MML:n Oma tili -palvelusta. Avain tallentuu vain tähän selaimeen.';
+    document.getElementById('mmlNote').textContent = k ? '' : 'MML:n tasot ovat käytössä, kun lisäät API-avaimen Asetuksista.';
+    document.getElementById('mmlNote').style.display = k ? 'none' : 'block';
+    if(!k){ const sel=document.querySelector('input[name=bm]:checked'); if(sel && sel.value.startsWith('mml_')){ document.querySelector('input[name=bm][value=harmaa]').checked=true; curBm.remove(); curBm=BM.harmaa.addTo(map); curBm.bringToBack(); } document.getElementById('lyKiintMml').checked=false; }
   };
-  const keyEl=document.getElementById('mmlKey'); keyEl.value=mmlKey();
-  keyEl.onchange=()=>{ try{ localStorage.setItem('kp_mml_key', keyEl.value.trim()); }catch(e){} refreshKey(); };
+  window.refreshKey=refreshKey;
   document.getElementById('lyKiintMml').onchange=e=>{ const k=mmlKey(); if(e.target.checked&&k){ kiintMml=makeKiintMml(k).addTo(map); } else if(kiintMml){ kiintMml.remove(); kiintMml=null; } };
   document.querySelectorAll('input[name=bm]').forEach(r=>r.onchange=()=>{ curBm.remove(); curBm=BM[r.value].addTo(map); curBm.bringToBack(); });
   refreshKey();
@@ -977,6 +1005,15 @@ function initMap(){
 function bind(){
   document.querySelectorAll('.filters input, .filters select, #sort').forEach(el=>el.addEventListener('input',apply));
   document.getElementById('copyBtn').onclick = copyList;
+  const dlg=document.getElementById('setDlg'), ki=document.getElementById('mmlKey'), st=document.getElementById('keyState');
+  const showState=()=>{ const k=mmlKey(); st.textContent = k ? 'Avain on tallennettu tähän selaimeen (päättyy …'+k.slice(-4)+').' : 'Avainta ei ole tallennettu.'; };
+  document.getElementById('setBtn').onclick=()=>{ ki.value=''; ki.type='password'; showState(); dlg.showModal(); ki.focus(); };
+  document.getElementById('showKey').onclick=()=>{ ki.type = ki.type==='password' ? 'text' : 'password'; };
+  document.getElementById('closeSet').onclick=()=>dlg.close();
+  const save=()=>{ const v=ki.value.trim(); if(!/^[0-9a-f-]{20,}$/i.test(v)){ st.textContent='Avain näyttää väärältä. Tarkista, että kopioit koko avaimen.'; return; } if(!setMmlKey(v)){ st.textContent='Selain ei salli tallentamista. Tarkista, ettei käytössä ole yksityinen selausikkuna.'; return; } ki.value=''; refreshKey(); dlg.close(); toast('Avain tallennettu tähän selaimeen.'); };
+  document.getElementById('saveKey').onclick=save;
+  document.getElementById('setForm').onsubmit=e=>{ e.preventDefault(); save(); };
+  document.getElementById('delKey').onclick=()=>{ setMmlKey(''); ki.value=''; refreshKey(); showState(); toast('Avain poistettu.'); };
 }
 
 function getVals(name){ return [...document.querySelectorAll(`input[name=${name}]:checked`)].map(i=>i.value); }
@@ -991,8 +1028,10 @@ function apply(){
     if(!kunnat.includes(r.kunta) || !aks.includes(r.ak)) return false;
     if(r.potentiaali < minPot) return false;
     if(r.asuin_osuus==null){ if(!inc) return false; } else if(r.asuin_osuus < minRes) return false;
-    const f=r.liput, any=f.vanha||f.matala||f.tyhja;
-    if(!((vaj.includes('vanha')&&f.vanha)||(vaj.includes('matala')&&f.matala)||(vaj.includes('tyhja')&&f.tyhja)||(vaj.includes('ei')&&!any))) return false;
+    const f=r.liput, any=f.vanha||f.matala||f.tyhja||f.vuokra;
+    if(!((vaj.includes('vanha')&&f.vanha)||(vaj.includes('matala')&&f.matala)||(vaj.includes('tyhja')&&f.tyhja)||(vaj.includes('vuokra')&&f.vuokra)||(vaj.includes('ei')&&!any))) return false;
+    if(document.getElementById('onlyVuokra').checked && !f.vuokra) return false;
+    if((r.vuokra_m2||0) < +document.getElementById('minVuokra').value) return false;
     if(r.asema_m > maxSt) return false;
     if(hideVir && r.vireilla.length) return false;
     const st=(STATE[r.id]||{}).s||'uusi';
@@ -1018,6 +1057,7 @@ function tagsHtml(r){
   if(r.liput.vanha) t.push(`<span class="tag v">${r.valm_vuosi||'vanha'}</span>`);
   if(r.liput.matala) t.push('<span class="tag v">matala e</span>');
   if(r.liput.tyhja) t.push('<span class="tag v">tyhjä/pys.</span>');
+  if(r.liput.vuokra) t.push(`<span class="tag vu">vuokralla ${fmt(r.vuokra_m2)} m²</span>`);
   if(r.vireilla.length) t.push('<span class="tag" style="border-color:#6b4fa0;color:#6b4fa0">kaava vireillä</span>');
   const st=(STATE[r.id]||{}).s; if(st && st!=='uusi') t.push(`<span class="tag st">${ST[st]}</span>`);
   return t.join('');
@@ -1069,7 +1109,11 @@ function renderCard(r){
       <div><div class="h">Yleiskaava</div><div class="v" style="color:var(--accent)">${r.yk_paa?esc(r.yk_selite||r.yk_paa):'Ei avointa tietoa'}</div><div class="note">${r.asuin_osuus!=null?'asumista '+pct(r.asuin_osuus)+' · e '+String(r.e_tavoite).replace('.',','):'Oletus e '+String(r.e_tavoite).replace('.',',')+', tarkista yleiskaava'}</div></div></div>
     ${ykRows?`<div class="note">Yleiskaavamerkinnät tontilla: ${ykRows}${r.kunta==='Vantaa'?' (tulkittu yleiskaavayhdistelmän väreistä, tarkista kartalta)':''}</div>`:''}
     <div class="sect"><h3>Vajaakäytön merkit</h3><div class="flags">
-      <span class="flag ${r.liput.vanha?'on':''}">Rakennettu ennen 1995</span><span class="flag ${r.liput.matala?'on':''}">Matala tehokkuus</span><span class="flag ${r.liput.tyhja?'on':''}">Tyhjä tai pysäköinti</span></div></div>
+      <span class="flag vu ${r.liput.vuokra?'on':''}">Toimitiloja vuokrattavana</span><span class="flag ${r.liput.vanha?'on':''}">Rakennettu ennen 1995</span><span class="flag ${r.liput.matala?'on':''}">Matala tehokkuus</span><span class="flag ${r.liput.tyhja?'on':''}">Tyhjä tai pysäköinti</span></div></div>
+    ${r.liput.vuokra?`<div class="sect"><h3>Toimitiloja vuokrattavana</h3>
+      <div class="note" style="margin-bottom:4px">${fmt(r.vuokra_m2)} m² vapaana (suurin ilmoitettu tila osoitteittain)${r.vuokra_osuus!=null?', noin '+pct(Math.min(r.vuokra_osuus,1))+' nykyisestä kerrosalasta':''} · ${r.vuokra_lkm} ilmoitusriviä</div>
+      <table class="vl">${r.vuokra.map(v=>`<tr><td>${esc(v.o)}</td><td class="r">${v.m2!=null?fmt(v.m2)+' m²':'–'}</td><td class="r">${v.n} ilm.</td></tr>`).join('')}</table>
+      <div class="note" style="margin-top:4px">Lähde: ${esc(DATA.vuokra_lahde||'Kauppalehti Toimitilat')}. Sama tila voi olla ilmoitettu useaan kertaan.</div></div>`:''}
     <div class="sect"><h3>Nykyiset rakennukset</h3>
       <table class="kv"><tr><td>Kerrosala nyt</td><td class="num">${fmt(r.kerrosala_nyt)} k-m² (e ${(r.kerrosala_nyt/r.ala).toFixed(2).replace('.',',')})</td></tr>
       <tr><td>Rakennuksia</td><td class="num">${r.rak_lkm}</td></tr>
@@ -1092,8 +1136,8 @@ function closeCard(){ document.getElementById('card').classList.remove('open'); 
 function setStatus(id,k){ STATE[id]={...(STATE[id]||{}), s:k}; store.set(STATE); renderCard(byId[id]); renderList(); }
 
 async function copyList(){
-  const head=['Pisteet','Kunta','Kaupunginosa','Osoite','Asemakaava','Yleiskaava','Asumisosuus %','Tontin ala m2','Rakennusoikeus k-m2','Kerrosala nyt k-m2','AK-potentiaali k-m2','Valmistumisvuosi','Vanha','Matala tehokkuus','Tyhjä/pysäköinti','Lähin asema','Etäisyys m','Vireillä','Status','Muistiinpanot','Tunnus'];
-  const rows=FILT.map(r=>{const s=STATE[r.id]||{}; return [r.pisteet,r.kunta,r.kaupunginosa,title(r),r.ak_tarkka||r.ak,r.yk_paa||'ei tietoa',r.asuin_osuus==null?'':Math.round(r.asuin_osuus*100),r.ala,r.rakennusoikeus||'',r.kerrosala_nyt,r.potentiaali,r.valm_vuosi||'',r.liput.vanha?'x':'',r.liput.matala?'x':'',r.liput.tyhja?'x':'',r.asema,r.asema_m,r.vireilla.map(v=>v.tunnus).join(' '),ST[s.s||'uusi'],(s.n||'').replace(/\s+/g,' '),r.id];});
+  const head=['Pisteet','Kunta','Kaupunginosa','Osoite','Asemakaava','Yleiskaava','Asumisosuus %','Tontin ala m2','Rakennusoikeus k-m2','Kerrosala nyt k-m2','AK-potentiaali k-m2','Valmistumisvuosi','Vanha','Matala tehokkuus','Tyhjä/pysäköinti','Vuokrattavana m2','Vuokrailmoituksia','Lähin asema','Etäisyys m','Vireillä','Status','Muistiinpanot','Tunnus'];
+  const rows=FILT.map(r=>{const s=STATE[r.id]||{}; return [r.pisteet,r.kunta,r.kaupunginosa,title(r),r.ak_tarkka||r.ak,r.yk_paa||'ei tietoa',r.asuin_osuus==null?'':Math.round(r.asuin_osuus*100),r.ala,r.rakennusoikeus||'',r.kerrosala_nyt,r.potentiaali,r.valm_vuosi||'',r.liput.vanha?'x':'',r.liput.matala?'x':'',r.liput.tyhja?'x':'',r.vuokra_m2||'',r.vuokra_lkm||'',r.asema,r.asema_m,r.vireilla.map(v=>v.tunnus).join(' '),ST[s.s||'uusi'],(s.n||'').replace(/\s+/g,' '),r.id];});
   const tsv=[head,...rows].map(r=>r.join('\t')).join('\n');
   try{ await navigator.clipboard.writeText(tsv); toast(`${rows.length} riviä kopioitu. Liitä Exceliin Ctrl+V.`); }catch(e){ toast('Kopiointi ei onnistunut tässä näkymässä.'); }
 }

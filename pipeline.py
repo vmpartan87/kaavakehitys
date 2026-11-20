@@ -173,6 +173,11 @@ def main():
             vir.append({'kunta': 'Vantaa', 'tunnus': v['k'], 'nimi': v.get('n'), 'vaihe': v.get('vaihe'), 'url': v.get('www'), 'geom': s})
     vir_tree = STRtree([v['geom'] for v in vir])
 
+    # vapaat toimitilat (Kauppalehti Toimitilat -vienti, paikannettu vapaat.py:llä)
+    import os
+    vapaat = json.load(open('raw/vapaat.json')) if os.path.exists('raw/vapaat.json') else []
+    vap_tree = STRtree([Point(v['e'], v['n']) for v in vapaat]) if vapaat else None
+
     recs = []
 
     def add(kunta, rid, kaava, ktk, ktk_tark, osoite, ala, ro, yk, bs, polys):
@@ -212,12 +217,21 @@ def main():
         # vireillä
         hits = [vir[i] for i in vir_tree.query(geom, predicate='intersects')]
         hits = [h for h in hits if h['geom'].intersection(geom).area > 0.2 * geom.area]
+        vh = [vapaat[i] for i in vap_tree.query(geom.buffer(CFG.get('vuokra_puskuri_m', 15)))] if vap_tree is not None else []
+        # sama tila voi olla ilmoitettu eri osoitekirjoitusasuilla tai osiin jaettuna:
+        # lasketaan osoitepisteittäin suurin ilmoitettu tila ja summataan pisteet
+        per_pt = {}
+        for v in vh:
+            k = (round(v['e'] / 10), round(v['n'] / 10))
+            per_pt[k] = max(per_pt.get(k, 0), v['m2'] or 0)
+        vuokra_m2 = int(sum(per_pt.values()))
         cur = bsum['kerrosala_nyt']
         ref = max(ro or 0, potential)
         flags = {
             'vanha': bool(bsum['valm_vuosi'] and bsum['valm_vuosi'] < CFG['vanha_raja']),
             'matala': bool(ref and cur < CFG['matala_osuus'] * ref and cur >= CFG['tyhja_osuus'] * ala),
             'tyhja': bool(cur < CFG['tyhja_osuus'] * ala or any(k == 'pysakointi' and v >= 0.5 for k, v in bsum['kaytto'])),
+            'vuokra': bool(vh),
         }
         x, y = T.transform(c.x, c.y)
         recs.append({
@@ -230,6 +244,9 @@ def main():
             'e_tavoite': round(e_target, 2),
             'potentiaali': int(round(potential / 100.0) * 100),
             'asema': st[1], 'asema_tyyppi': st[0], 'asema_m': int(round(dist)),
+            'vuokra_m2': vuokra_m2, 'vuokra_lkm': len(vh),
+            'vuokra_osuus': round(vuokra_m2 / cur, 2) if cur else None,
+            'vuokra': [{'o': v['osoite'], 'm2': v['m2'], 'n': v['ilmoituksia']} for v in sorted(vh, key=lambda v: -(v['m2'] or 0))][:12],
             'vireilla': [{'tunnus': h['tunnus'], 'nimi': h['nimi'], 'vaihe': h['vaihe'], 'url': h['url']} for h in hits][:3],
             'liput': flags,
             'lon': round(x, 6), 'lat': round(y, 6), 'e': int(c.x), 'n': int(c.y),
@@ -254,7 +271,7 @@ def main():
         else:
             s += r['asuin_osuus'] * W['yk']
         f = r['liput']
-        s += min((W['vanha'] if f['vanha'] else 0) + (W['matala'] if f['matala'] else 0) + (W['tyhja'] if f['tyhja'] else 0), W['vajaa_max'])
+        s += min((W['vanha'] if f['vanha'] else 0) + (W['matala'] if f['matala'] else 0) + (W['tyhja'] if f['tyhja'] else 0) + (W['vuokra'] if f.get('vuokra') else 0), W['vajaa_max'])
         d = r['asema_m']
         s += W['asema'] if d <= 500 else W['asema'] * 0.7 if d <= 800 else W['asema'] * 0.4 if d <= 1200 else 0
         r['pisteet'] = int(round(s))
@@ -298,7 +315,7 @@ def main():
         'asemat': [{'t': t, 'n': n, 'll': wgs_line([(p.x, p.y)])[0]} for t, n, p in stations],
         'vireilla': [{'kunta': v['kunta'], 'tunnus': v['tunnus'], 'nimi': v['nimi'], 'vaihe': v['vaihe'], 'url': v['url'], 'c': wgs_coords(v['geom'].simplify(3), 5)} for v in vir],
     }
-    json.dump({'paivitetty': CFG['paivitetty'], 'asetukset': {k: CFG[k] for k in ('yk_tehokkuus', 'yk_selitteet', 'pisteet', 'vanha_raja', 'matala_osuus', 'tyhja_osuus', 'espoo_oletustehokkuus')}, 'kohteet': recs, 'tausta': bg},
+    json.dump({'paivitetty': CFG['paivitetty'], 'vuokra_lahde': CFG.get('vuokra_lahde'), 'asetukset': {k: CFG[k] for k in ('yk_tehokkuus', 'yk_selitteet', 'pisteet', 'vanha_raja', 'matala_osuus', 'tyhja_osuus', 'espoo_oletustehokkuus')}, 'kohteet': recs, 'tausta': bg},
               open('out/data.json', 'w'), ensure_ascii=False, separators=(',', ':'))
     c = collections.Counter((r['kunta'], r['potentiaali'] >= 2500) for r in recs)
     print('kohteita', len(recs), dict(c))
