@@ -846,6 +846,12 @@ dialog::backdrop{background:rgba(0,0,0,.35)}
       </div>
       <div><span class="flabel">AK-potentiaali vähintään</span>
         <div class="range"><input id="minPot" type="range" min="1000" max="20000" step="500" value="2500"><output id="minPotO" class="num"></output></div></div>
+      <div><span class="flabel">AK-potentiaali enintään</span>
+        <div class="range"><input id="maxPot" type="range" min="1000" max="100000" step="1000" value="100000"><output id="maxPotO" class="num"></output></div></div>
+      <div><span class="flabel">Nykyisten rakennusten rakennusvuosi</span>
+        <div class="range"><input id="yFrom" type="range" min="1900" max="2026" step="1" value="1900" aria-label="Rakennettu aikaisintaan"><output id="yFromO" class="num"></output></div>
+        <div class="range"><input id="yTo" type="range" min="1900" max="2026" step="1" value="2026" aria-label="Rakennettu viimeistään"><output id="yToO" class="num"></output></div>
+        <label class="chip" style="margin-top:6px"><input type="checkbox" id="incNoYear" checked>Näytä myös kohteet ilman rakennusvuotta (rakentamattomat)</label></div>
       <div><span class="flabel">Yleiskaava osoittaa asumista, osuus tontista vähintään</span>
         <div class="range"><input id="minRes" type="range" min="0" max="100" step="10" value="50"><output id="minResO" class="num"></output></div>
         <label class="chip" style="margin-top:6px"><input type="checkbox" id="incUnknown" checked>Näytä myös kohteet ilman yleiskaavatietoa (Espoo)</label></div>
@@ -859,6 +865,7 @@ dialog::backdrop{background:rgba(0,0,0,.35)}
         <p><b>AK-potentiaali</b> = tontin ala × yleiskaavamerkinnän tavoitetehokkuus × asumiseen osoitetun alueen osuus. Tehokkuusoletukset: HEL A1 2,0 · A2 1,4 · A3 0,8 · A4 0,4 · C1 2,5 · C2 2,0 · C3 1,5; VAN A 1,2 · AC 1,5 · C 2,0 · AP 0,4; ESP oletus 1,0.</p>
         <p><b>Pisteet 0–100:</b> potentiaali enintään 35 (täysi 25 000 k-m²:stä), yleiskaavan asumisosuus enintään 15 (Espoo 6), vajaakäyttö enintään 30 (toimitiloja vuokrattavana 15, vanha 10, matala tehokkuus 15, tyhjä/pysäköinti 10), raideasema 20 (≤ 500 m), 14 (≤ 800 m), 8 (≤ 1 200 m).</p>
         <p><b>Toimitiloja vuokrattavana</b> = Kauppalehti Toimitilojen vapaiden tilojen ilmoitus (20.11.2026) osuu tontille. Osoitteet on paikannettu pääkaupunkiseudun osoiteluettelolla.</p>
+        <p>Rakennusvuosisuodatin käyttää tontin rakennusten kerrosalalla painotettua valmistumisvuotta. AK-potentiaalin enimmäismäärän liukukytkin ääriasennossa oikealla tarkoittaa, ettei ylärajaa ole.</p>
         <p>Matala tehokkuus = nykyinen kerrosala alle 50 % rakennusoikeudesta tai potentiaalista. Tyhjä = kerrosala alle 10 % tontin alasta tai yli puolet pysäköintiä.</p>
       </details>
     </div>
@@ -937,6 +944,20 @@ function title(r){ return r.osoite ? r.osoite.replace(/\s+\d{5}\s+\S+$/,'') : (r
 async function init(){
   DATA = await fetch('data.json').then(r=>r.json());
   ITEMS = DATA.kohteet; ITEMS.forEach(r=>byId[r.id]=r);
+  // Liukukytkimien rajat aineistosta
+  const $ = id => document.getElementById(id);
+  const ys = ITEMS.map(r=>r.valm_vuosi).filter(Boolean);
+  const y0 = ys.length ? ys.reduce((a,b)=>Math.min(a,b)) : 1900;
+  const y1 = Math.max(new Date().getFullYear(), ys.length ? ys.reduce((a,b)=>Math.max(a,b)) : 0);
+  for(const id of ['yFrom','yTo']){ $(id).min=y0; $(id).max=y1; }
+  $('yFrom').value=y0; $('yTo').value=y1;
+  const pMax = Math.min(100000, Math.ceil(ITEMS.reduce((m,r)=>Math.max(m,r.potentiaali||0),0)/1000)*1000) || 100000;
+  $('maxPot').max=pMax; $('maxPot').value=pMax;
+  // Pidä vähintään ≤ enintään
+  $('minPot').addEventListener('input',()=>{ if(+$('minPot').value>+$('maxPot').value) $('maxPot').value=$('minPot').value; });
+  $('maxPot').addEventListener('input',()=>{ if(+$('maxPot').value<+$('minPot').value) $('minPot').value=$('maxPot').value; });
+  $('yFrom').addEventListener('input',()=>{ if(+$('yFrom').value>+$('yTo').value) $('yTo').value=$('yFrom').value; });
+  $('yTo').addEventListener('input',()=>{ if(+$('yTo').value<+$('yFrom').value) $('yFrom').value=$('yTo').value; });
   initMap(); bind(); apply();
 }
 
@@ -1023,10 +1044,16 @@ function apply(){
   const minPot=+minPotEl.value, minRes=+minResEl.value/100, inc=incUnknown.checked, maxSt=+maxStEl.value, hideVir=hideVirEl.checked, stF=stFEl.value;
   document.getElementById('minPotO').textContent = fmt(minPot)+' k-m²';
   document.getElementById('minResO').textContent = minResEl.value+' %';
+  const maxPotEl=document.getElementById('maxPot'), noMax = +maxPotEl.value >= +maxPotEl.max, maxPot = noMax ? Infinity : +maxPotEl.value;
+  document.getElementById('maxPotO').textContent = noMax ? 'ei rajaa' : fmt(maxPot)+' k-m²';
+  const yFrom=+document.getElementById('yFrom').value, yTo=+document.getElementById('yTo').value, incNoYear=document.getElementById('incNoYear').checked;
+  document.getElementById('yFromO').textContent = 'alkaen '+yFrom;
+  document.getElementById('yToO').textContent = 'asti '+yTo;
   const q = document.getElementById('q').value.trim().toLowerCase();
   FILT = ITEMS.filter(r=>{
     if(!kunnat.includes(r.kunta) || !aks.includes(r.ak)) return false;
-    if(r.potentiaali < minPot) return false;
+    if(r.potentiaali < minPot || r.potentiaali > maxPot) return false;
+    if(r.valm_vuosi){ if(r.valm_vuosi < yFrom || r.valm_vuosi > yTo) return false; } else if(!incNoYear) return false;
     if(r.asuin_osuus==null){ if(!inc) return false; } else if(r.asuin_osuus < minRes) return false;
     const f=r.liput, any=f.vanha||f.matala||f.tyhja||f.vuokra;
     if(!((vaj.includes('vanha')&&f.vanha)||(vaj.includes('matala')&&f.matala)||(vaj.includes('tyhja')&&f.tyhja)||(vaj.includes('vuokra')&&f.vuokra)||(vaj.includes('ei')&&!any))) return false;
@@ -1065,7 +1092,7 @@ function tagsHtml(r){
 
 function renderList(){
   const el=document.getElementById('list');
-  if(!FILT.length){ el.innerHTML='<div class="empty">Yksikään kohde ei täytä valittuja ehtoja. Laske potentiaalin tai yleiskaavaosuuden rajaa.</div>'; return; }
+  if(!FILT.length){ el.innerHTML='<div class="empty">Yksikään kohde ei täytä valittuja ehtoja. Väljennä potentiaalin, rakennusvuoden tai yleiskaavaosuuden rajoja.</div>'; return; }
   el.innerHTML = FILT.slice(0,400).map(r=>`<div class="row${r.id===selId?' sel':''}" role="listitem" tabindex="0" data-id="${esc(r.id)}">
     <div class="score num" style="background:${scoreColor(r.pisteet)}">${r.pisteet}</div>
     <div><div class="rtitle">${esc(title(r))}</div><div class="rsub">${esc(r.kaupunginosa)}, ${esc(r.kunta)} · ${esc(r.asema)} ${fmt(r.asema_m)} m</div><div class="tags">${tagsHtml(r)}</div></div>
